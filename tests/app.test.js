@@ -306,3 +306,30 @@ test('選んでいた名前が削除されていたら、名前の選択に戻�
   assert.equal(ctx.d.getElementById('me-select').value, '');
   assert.equal(ctx.w.localStorage.getItem('mendan.me'), null);
 });
+
+test('確定した日時を日時順に名前とまとめてコピーし、未確定の人は末尾に載せる', async () => {
+  const gas = seed();
+  const rows = gas.sheet('メンバー').data;
+  rows[1][4] = key(D2, '13:00');
+  rows[3][4] = key(D1, '10:00');
+  const ctx = await loadAdmin(gas);
+  const { d, w } = ctx;
+  Object.defineProperty(w.navigator, 'clipboard', { value: { writeText: async text => { ctx.copied = text; } } });
+  await click(ctx, '[data-copy]');
+  const [m1, d1] = D1.split('-').slice(1).map(Number);
+  const [m2, d2] = D2.split('-').slice(1).map(Number);
+  const wd = date => '日月火水木金土'[new Date(`${date}T00:00:00`).getDay()];
+  assert.equal(ctx.copied, [
+    '【上期 面談日程】',
+    `${m1}/${d1}(${wd(D1)}) 10:00〜10:30 佐藤 次郎`,
+    `${m2}/${d2}(${wd(D2)}) 13:00〜13:30 山田 太郎`,
+    '',
+    '未確定：鈴木 花子',
+  ].join('\n'));
+  assert.equal(toastText(d), 'コピーしました');
+});
+
+test('確定した人がいなければコピーボタンを出さない', async () => {
+  const { d } = await loadAdmin();
+  assert.equal(d.querySelector('[data-copy]'), null);
+});

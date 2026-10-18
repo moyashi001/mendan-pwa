@@ -249,6 +249,7 @@ function requestsHtml(members) {
     <div class="summary">
       <div><b>${done.length}</b>確定</div><div><b>${waiting.length}</b>確定待ち</div><div class="${none.length ? 'alert' : ''}"><b>${none.length}</b>未回答</div>
     </div>
+    ${done.length ? '<button type="button" class="copy-btn" data-copy>📋 確定した日時をコピー</button>' : ''}
     ${group('確定待ち（タップして確定）', waiting, m => `<span class="sub">${wish(m, 'first', '第1')}</span><span class="sub">${wish(m, 'second', '第2')}</span>`)}
     ${group('未回答', none, () => `<span class="sub">まだ希望を出していません</span>`)}
     ${group('確定済み', done, m => `<span class="sub ok">確定：${esc(slotLabel(m.confirmed))}</span>`)}`;
@@ -391,7 +392,39 @@ document.querySelectorAll('.tab').forEach(t => t.addEventListener('click', () =>
 el.requests.addEventListener('click', e => {
   const btn = e.target.closest('[data-confirm]');
   if (btn) openConfirm(btn.dataset.confirm);
+  if (e.target.closest('[data-copy]')) copyText(scheduleText());
 });
+
+// 確定した人を日時順に1行1人で並べ、未確定の人は末尾に名前だけ載せる
+function scheduleText() {
+  const members = (state.admin && state.admin.members) || [];
+  const done = members.filter(m => m.confirmed).sort((a, b) => (a.confirmed < b.confirmed ? -1 : 1));
+  const rest = members.filter(m => !m.confirmed);
+  return [
+    `【${state.title ? `${state.title} ` : ''}面談日程】`,
+    ...done.map(m => `${slotLabel(m.confirmed)} ${m.name}`),
+    ...(rest.length ? ['', `未確定：${rest.map(m => m.name).join('、')}`] : []),
+  ].join('\n');
+}
+
+async function copyText(text) {
+  try {
+    await navigator.clipboard.writeText(text);
+  } catch {
+    // クリップボード API が使えない環境では、選択してコピーする
+    const area = document.createElement('textarea');
+    area.value = text;
+    document.body.append(area);
+    area.select();
+    const ok = document.execCommand('copy');
+    area.remove();
+    if (!ok) {
+      toast('コピーできませんでした', 'error');
+      return;
+    }
+  }
+  toast('コピーしました', 'success');
+}
 
 // ---- 面談枠の追加（日付を複数選び、同じ時間帯で作る） ----
 let slotDates = [];

@@ -1,5 +1,5 @@
 // 画面ファイルはネット優先・失敗時はキャッシュ。GAS への通信はキャッシュしない
-const CACHE = 'mendan-v2';
+const CACHE = 'mendan-v3';
 const ASSETS = ['./', 'index.html', 'style.css', 'app.js', 'config.js', 'manifest.json', 'icon-192.png', 'icon-512.png'];
 
 self.addEventListener('install', e => {
