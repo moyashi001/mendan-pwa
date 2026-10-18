@@ -1,0 +1,124 @@
+<!doctype html>
+<html lang="ja">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+  <meta name="theme-color" content="#1d4f91">
+  <meta name="apple-mobile-web-app-capable" content="yes">
+  <meta name="apple-mobile-web-app-title" content="面談管理">
+  <title>面談管理</title>
+  <link rel="manifest" href="manifest.json">
+  <link rel="icon" href="icon-192.png">
+  <link rel="apple-touch-icon" href="icon-192.png">
+  <link rel="stylesheet" href="style.css">
+</head>
+<body>
+  <header class="app-header">
+    <h1 id="app-title">面談管理</h1>
+    <div class="header-actions">
+      <button id="mode-btn" class="icon-btn text" type="button">管理</button>
+      <button id="refresh-btn" class="icon-btn" type="button" aria-label="更新">⟳</button>
+    </div>
+  </header>
+
+  <!-- メンバー画面 -->
+  <section id="member-view">
+    <div class="me">
+      <label for="me-select">あなたの名前</label>
+      <select id="me-select"></select>
+    </div>
+    <div id="me-status"></div>
+    <main id="slot-list"></main>
+    <div id="choose-bar" class="choose-bar" hidden>
+      <p id="choose-summary" class="choose-summary"></p>
+      <button id="choose-btn" type="button" class="primary">この希望で送信</button>
+    </div>
+  </section>
+
+  <!-- 管理者画面 -->
+  <section id="admin-view" hidden>
+    <nav class="tabs" role="tablist">
+      <button class="tab" data-tab="requests" role="tab">希望・確定</button>
+      <button class="tab" data-tab="slots" role="tab">面談枠</button>
+      <button class="tab" data-tab="members" role="tab">メンバー</button>
+    </nav>
+    <main>
+      <section id="tab-requests" class="panel"></section>
+
+      <section id="tab-slots" class="panel">
+        <form id="slot-form" class="card-form">
+          <div class="grid2">
+            <label>日付<input id="slot-date" type="date" required></label>
+            <label>1枠（分）<input id="slot-minutes" type="number" min="5" max="480" step="5" value="30" required></label>
+            <label>開始<input id="slot-start" type="time" step="300" required></label>
+            <label>終了（任意）<input id="slot-end" type="time" step="300"></label>
+          </div>
+          <p class="hint">終了を入れると、開始〜終了を1枠の長さで区切ってまとめて作ります</p>
+          <button type="submit" class="primary">枠を追加</button>
+        </form>
+        <div id="slot-admin-list"></div>
+      </section>
+
+      <section id="tab-members" class="panel">
+        <form id="member-form" class="add-form">
+          <input id="add-empid" type="text" inputmode="text" placeholder="社員番号" autocomplete="off" enterkeyhint="next">
+          <input id="add-name" type="text" placeholder="名前" autocomplete="off" enterkeyhint="done">
+          <button type="submit" class="primary">追加</button>
+        </form>
+        <div id="member-admin-list"></div>
+      </section>
+    </main>
+    <p class="logout"><button id="logout-btn" type="button" class="ghost small">管理画面からログアウト</button></p>
+  </section>
+
+  <!-- 管理パスコード -->
+  <dialog id="pass-dialog">
+    <form method="dialog">
+      <h2>管理者パスコード</h2>
+      <input id="pass-input" type="password" autocomplete="current-password" placeholder="パスコード">
+      <div class="dialog-actions">
+        <button value="cancel" type="submit">キャンセル</button>
+        <button value="ok" type="submit" class="primary">開く</button>
+      </div>
+    </form>
+  </dialog>
+
+  <!-- 面談日時の確定 -->
+  <dialog id="confirm-dialog">
+    <form method="dialog">
+      <h2 id="confirm-title"></h2>
+      <p id="confirm-wish" class="sub"></p>
+      <label>確定する枠<select id="confirm-select"></select></label>
+      <div class="dialog-actions">
+        <button id="confirm-cancel-btn" value="unconfirm" type="submit" class="danger">確定を取り消す</button>
+        <button value="cancel" type="submit">閉じる</button>
+        <button value="ok" type="submit" class="primary">確定</button>
+      </div>
+    </form>
+  </dialog>
+
+  <!-- メンバーの編集 -->
+  <dialog id="edit-dialog">
+    <form method="dialog">
+      <h2>メンバーを編集</h2>
+      <label>社員番号<input id="edit-empid" type="text" autocomplete="off"></label>
+      <label>名前<input id="edit-name" type="text" autocomplete="off"></label>
+      <div class="dialog-actions">
+        <button value="cancel" type="submit">キャンセル</button>
+        <button value="ok" type="submit" class="primary">保存</button>
+      </div>
+    </form>
+  </dialog>
+
+  <div id="busy" class="busy" hidden role="status" aria-live="polite">
+    <div class="busy-box">
+      <div class="spinner"></div>
+      <p id="busy-text">保存中…</p>
+    </div>
+  </div>
+  <div id="toast" class="toast" hidden></div>
+
+  <script src="config.js"></script>
+  <script src="app.js"></script>
+</body>
+</html>

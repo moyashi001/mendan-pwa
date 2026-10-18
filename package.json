@@ -1,0 +1,11 @@
+{
+  "name": "mendan-pwa",
+  "private": true,
+  "description": "面談管理PWA（動作テスト用。アプリ自体はビルド不要の静的ファイル）",
+  "scripts": {
+    "test": "node --test \"tests/**/*.test.js\""
+  },
+  "devDependencies": {
+    "jsdom": "24.1.3"
+  }
+}

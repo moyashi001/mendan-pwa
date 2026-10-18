@@ -1,0 +1,5 @@
+# テスト関連は公開しない（package.json があると Vercel が npm install を実行するため除外する）
+tests/
+package.json
+package-lock.json
+node_modules/
