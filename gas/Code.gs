@@ -11,7 +11,7 @@ const LOG_HEADER = ['日時', '操作', '対象', '内容'];
 const TITLE_KEY = '面談名';
 const PASS_KEY = '管理パスコード';
 const TZ = 'Asia/Tokyo';
-const MAX_SLOTS_PER_ADD = 50;
+const MAX_SLOTS_PER_ADD = 100;
 // パスコードを続けて間違えたら、しばらく管理操作を受け付けない
 const MAX_PASS_FAILS = 10;
 const PASS_LOCK_SECONDS = 600;
@@ -80,7 +80,7 @@ function respond_(fn) {
 
 // ---- メンバーの操作（名前を選ぶだけで使える） ----
 const ACTIONS = {
-  // 第1希望（必須）と第2希望（任意）を保存する。確定後は変えられない
+  // 第1希望と第2希望（どちらも必須）を保存する。確定後は変えられない
   choose(s, req) {
     const name = String(req.name || '');
     const m = memberByName_(s, name);
@@ -96,8 +96,9 @@ const ACTIONS = {
       if (taken.has(key)) throw new Error(`${label}の枠はほかの人で確定済みです。選び直してください`);
       return key;
     };
-    const first = pick(String(req.first || ''), '第1希望');
-    const second = req.second ? pick(String(req.second), '第2希望') : '';
+    if (!req.first || !req.second) throw new Error('第1希望と第2希望を選んでください');
+    const first = pick(String(req.first), '第1希望');
+    const second = pick(String(req.second), '第2希望');
     if (first === second) throw new Error('第1希望と第2希望は別の枠を選んでください');
     s.members.getRange(row, 3, 1, 2).setValues([[first, second]]);
     s.members.getRange(row, 6).setValue(new Date());
@@ -111,9 +112,11 @@ const ACTIONS = {
 const ADMIN_ACTIONS = {
   login() {},
 
-  // 開始〜終了の間に minutes 分ごとの枠を作る。終了が空なら1枠だけ。同じ日付・開始の枠は飛ばす
+  // 選んだ日付それぞれで、開始〜終了の間に minutes 分ごとの枠を作る。終了が空なら1枠だけ。同じ日付・開始の枠は飛ばす
   addSlots(s, req) {
-    const date = validDate_(req.date);
+    const dates = [...new Set((Array.isArray(req.dates) ? req.dates : [req.date]).map(validDate_))].sort();
+    if (!dates.length) throw new Error('日付を選んでください');
+    if (dates[0] < today_()) throw new Error('過ぎた日付には枠を作れません');
     const start = toMinutes_(validTime_(req.start));
     const minutes = Math.floor(Number(req.minutes) || 0);
     if (minutes < 5 || minutes > 480) throw new Error('1枠の長さは5〜480分で入力してください');
@@ -123,18 +126,20 @@ const ADMIN_ACTIONS = {
     const exists = new Set(readSlots_(s).map(x => x.key));
     const rows = [];
     let skipped = 0;
-    for (let t = start; t + minutes <= end; t += minutes) {
-      const row = [date, fromMinutes_(t), fromMinutes_(t + minutes)];
-      if (exists.has(slotKey_(date, row[1]))) {
-        skipped++;
-        continue;
+    dates.forEach(date => {
+      for (let t = start; t + minutes <= end; t += minutes) {
+        const row = [date, fromMinutes_(t), fromMinutes_(t + minutes)];
+        if (exists.has(slotKey_(date, row[1]))) {
+          skipped++;
+          continue;
+        }
+        rows.push(row);
       }
-      rows.push(row);
-    }
+    });
     if (rows.length > MAX_SLOTS_PER_ADD) throw new Error(`一度に作れる枠は${MAX_SLOTS_PER_ADD}件までです`);
     if (rows.length) {
       s.slots.getRange(s.slots.getLastRow() + 1, 1, rows.length, 3).setValues(rows);
-      log_(s, '枠追加', date, rows.map(r => `${r[1]}〜${r[2]}`).join('、'));
+      log_(s, '枠追加', dates.length === 1 ? dates[0] : `${dates.length}日`, rows.map(r => `${r[0]} ${r[1]}〜${r[2]}`).join('、'));
     }
     return { added: rows.length, skipped };
   },

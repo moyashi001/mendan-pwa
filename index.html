@@ -47,14 +47,19 @@
 
       <section id="tab-slots" class="panel">
         <form id="slot-form" class="card-form">
+          <label for="slot-date">日付（複数選べます）</label>
+          <div class="date-add">
+            <input id="slot-date" type="date">
+            <button id="date-add-btn" type="button">追加</button>
+          </div>
+          <div id="date-chips" class="chips"></div>
           <div class="grid2">
-            <label>日付<input id="slot-date" type="date" required></label>
-            <label>1枠（分）<input id="slot-minutes" type="number" min="5" max="480" step="5" value="30" required></label>
             <label>開始<input id="slot-start" type="time" step="300" required></label>
             <label>終了（任意）<input id="slot-end" type="time" step="300"></label>
+            <label>1枠（分）<input id="slot-minutes" type="number" min="5" max="480" step="5" value="30" required></label>
           </div>
-          <p class="hint">終了を入れると、開始〜終了を1枠の長さで区切ってまとめて作ります</p>
-          <button type="submit" class="primary">枠を追加</button>
+          <p class="hint">選んだ日付すべてに、同じ時間帯の枠を作ります。終了を入れると、開始〜終了を1枠の長さで区切ってまとめて作ります</p>
+          <button id="slot-submit" type="submit" class="primary">枠を追加</button>
         </form>
         <div id="slot-admin-list"></div>
       </section>

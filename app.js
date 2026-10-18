@@ -165,7 +165,7 @@ function renderMember() {
   el.chooseBar.hidden = !(choosing && slots.length);
   el.chooseSummary.innerHTML = `第1：<b>${esc(slotLabel(draft.first))}</b><br>第2：<b>${esc(slotLabel(draft.second))}</b>`;
   const changed = mine && (draft.first !== mine.first || draft.second !== mine.second);
-  el.chooseBtn.disabled = !draft.first || !changed;
+  el.chooseBtn.disabled = !draft.first || !draft.second || !changed;
 }
 
 function statusHtml(mine) {
@@ -183,7 +183,7 @@ function statusHtml(mine) {
       ${lost ? '<p class="warn">⚠ 希望した枠がほかの人で埋まりました。選び直してください</p>' : ''}
       <p class="sub">確定するまでは選び直せます${mine.updatedAt ? `（送信：${esc(mine.updatedAt)}）` : ''}</p></div>`;
   }
-  return `<p class="card">下の一覧から<b>第1希望</b>を選んで送信してください（第2希望は任意）</p>`;
+  return `<p class="card">下の一覧から<b>第1希望</b>と<b>第2希望</b>を選んで送信してください</p>`;
 }
 
 function slotsHtml(slots, mine) {
@@ -393,10 +393,58 @@ el.requests.addEventListener('click', e => {
   if (btn) openConfirm(btn.dataset.confirm);
 });
 
+// ---- 面談枠の追加（日付を複数選び、同じ時間帯で作る） ----
+let slotDates = [];
+
+// 日付欄に入れたまま「追加」を押していない日付も含める
+function pendingDates() {
+  const typed = $('slot-date').value;
+  return typed && !slotDates.includes(typed) ? [...slotDates, typed].sort() : slotDates;
+}
+
+// 作られる枠の数（すでにある枠も含む）。開始などが未入力なら 0
+function slotCount() {
+  const toMin = t => (t ? Number(t.slice(0, 2)) * 60 + Number(t.slice(3)) : NaN);
+  const start = toMin($('slot-start').value);
+  const minutes = Number($('slot-minutes').value);
+  const end = $('slot-end').value ? toMin($('slot-end').value) : start + minutes;
+  if (!(minutes > 0) || isNaN(start) || end < start + minutes) return 0;
+  return Math.floor((end - start) / minutes) * pendingDates().length;
+}
+
+function renderSlotForm() {
+  $('date-chips').innerHTML = slotDates.map(d =>
+    `<button type="button" class="chip" data-remove-date="${esc(d)}" aria-label="${esc(fmtDate(d))}を外す">${esc(fmtDate(d))} ×</button>`).join('');
+  const n = slotCount();
+  $('slot-submit').textContent = n ? `${n}枠を追加` : '枠を追加';
+}
+
+function addSlotDate() {
+  const d = $('slot-date').value;
+  if (!d) return;
+  if (!slotDates.includes(d)) slotDates = [...slotDates, d].sort();
+  $('slot-date').value = '';
+  renderSlotForm();
+}
+
+$('date-add-btn').addEventListener('click', addSlotDate);
+$('date-chips').addEventListener('click', e => {
+  const chip = e.target.closest('[data-remove-date]');
+  if (!chip) return;
+  slotDates = slotDates.filter(d => d !== chip.dataset.removeDate);
+  renderSlotForm();
+});
+$('slot-form').addEventListener('input', renderSlotForm);
+
 $('slot-form').addEventListener('submit', async e => {
   e.preventDefault();
+  const dates = pendingDates();
+  if (!dates.length) {
+    toast('日付を選んでください', 'error');
+    return;
+  }
   const params = {
-    date: $('slot-date').value,
+    dates,
     start: $('slot-start').value,
     end: $('slot-end').value,
     minutes: Number($('slot-minutes').value),
@@ -406,7 +454,12 @@ $('slot-form').addEventListener('submit', async e => {
   const { added, skipped } = ok.result;
   toast(added ? `${added}枠を追加しました${skipped ? `（同じ時刻の${skipped}枠は飛ばしました）` : ''}` : '同じ時刻の枠がすでにあります',
     added ? 'success' : 'error');
-  if (added) $('slot-end').value = '';
+  if (added) {
+    slotDates = [];
+    $('slot-date').value = '';
+    $('slot-end').value = '';
+    renderSlotForm();
+  }
 });
 
 el.slotAdminList.addEventListener('click', e => {

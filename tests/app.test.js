@@ -15,6 +15,7 @@ const APP = fs.readFileSync(path.join(ROOT, 'app.js'), 'utf8');
 const PASS = '1234';
 const D1 = jstDate(1);
 const D2 = jstDate(2);
+const D3 = jstDate(3);
 const PAST = jstDate(-1);
 
 // メンバー3人・枠（昨日1・明日2・明後日1）・面談名・パスコードを入れたスプレッドシート
@@ -104,6 +105,8 @@ test('名前を選んで第1・第2希望を送信し、過ぎた枠は表示し
   assert.equal(d.getElementById('choose-btn').disabled, true);
 
   await click(ctx, `[data-pick="first"][data-key="${key(D1, '10:30')}"]`);
+  // 第2希望も選ぶまでは送信できない
+  assert.equal(d.getElementById('choose-btn').disabled, true);
   await click(ctx, `[data-pick="second"][data-key="${key(D2, '13:00')}"]`);
   // 第2希望と同じ枠を第1に選ぶと、第2からは外れる
   await click(ctx, `[data-pick="first"][data-key="${key(D2, '13:00')}"]`);
@@ -129,10 +132,11 @@ test('ほかの人の希望は人数だけ表示し、確定済みの枠は選�
   assert.deepEqual(texts(d, '#slot-list .sub'), ['ほかの人の希望：第1 1人・第2 0人', '埋まりました', '空き']);
   assert.ok(d.querySelector(`[data-pick="first"][data-key="${key(D1, '10:30')}"]`).disabled);
   // 画面を通さずに送っても GAS で断る
-  const res = gas.post({ action: 'choose', name: '山田 太郎', first: key(D1, '10:30') });
+  const res = gas.post({ action: 'choose', name: '山田 太郎', first: key(D1, '10:30'), second: key(D2, '13:00') });
   assert.equal(res.ok, false);
   assert.match(res.error, /確定済み/);
-  assert.match(gas.post({ action: 'choose', name: '山田 太郎', first: key(PAST, '10:00') }).error, /過ぎています/);
+  assert.match(gas.post({ action: 'choose', name: '山田 太郎', first: key(PAST, '10:00'), second: key(D2, '13:00') }).error, /過ぎています/);
+  assert.match(gas.post({ action: 'choose', name: '山田 太郎', first: key(D2, '13:00') }).error, /第1希望と第2希望を選んでください/);
 });
 
 test('確定した人には面談日時を表示し、希望は出せない', async () => {
@@ -144,7 +148,7 @@ test('確定した人には面談日時を表示し、希望は出せない', as
   assert.match(d.getElementById('me-status').textContent, /13:00〜13:30/);
   assert.equal(d.querySelectorAll('#slot-list .row').length, 0);
   assert.equal(d.getElementById('choose-bar').hidden, true);
-  assert.match(gas.post({ action: 'choose', name: '山田 太郎', first: key(D1, '10:00') }).error, /確定済み/);
+  assert.match(gas.post({ action: 'choose', name: '山田 太郎', first: key(D1, '10:00'), second: key(D1, '11:00') }).error, /確定済み/);
 });
 
 test('管理画面はパスコードが必要で、間違えるとメンバー画面に戻る', async () => {
@@ -211,20 +215,39 @@ test('管理者は希望から日時を確定・取り消しでき、重複や�
   assert.deepEqual(gas.rows('変更履歴').map(r => r[1]), ['確定取消', '確定']);
 });
 
-test('枠は開始〜終了を区切ってまとめて作り、同じ時刻の枠は飛ばす', async () => {
+test('枠は複数の日付に、開始〜終了を区切ってまとめて作り、同じ時刻の枠は飛ばす', async () => {
   const ctx = await loadAdmin();
   const { d, gas } = ctx;
   await click(ctx, '[data-tab="slots"]');
-  d.getElementById('slot-date').value = D1;
-  d.getElementById('slot-start').value = '09:00';
-  d.getElementById('slot-end').value = '11:00';
-  d.getElementById('slot-minutes').value = '30';
-  d.getElementById('slot-form').dispatchEvent(new ctx.w.Event('submit', { cancelable: true }));
+  const form = d.getElementById('slot-form');
+  const fill = (id, value) => {
+    d.getElementById(id).value = value;
+    form.dispatchEvent(new ctx.w.Event('input'));
+  };
+  // 日付を2つ追加し、もう1つは日付欄に入れたままにする（これも含める）
+  fill('slot-date', D2);
+  await click(ctx, '#date-add-btn');
+  fill('slot-date', D1);
+  await click(ctx, '#date-add-btn');
+  fill('slot-date', D3);
+  await click(ctx, '#date-add-btn');
+  assert.deepEqual(texts(d, '#date-chips .chip').length, 3);
+  await click(ctx, `[data-remove-date="${D3}"]`);
+  fill('slot-date', D3);
+  fill('slot-start', '09:00');
+  fill('slot-end', '11:00');
+  fill('slot-minutes', '30');
+  assert.equal(d.getElementById('slot-submit').textContent, '12枠を追加');
+  form.dispatchEvent(new ctx.w.Event('submit', { cancelable: true }));
   await tick();
-  assert.equal(toastText(d), '2枠を追加しました（同じ時刻の2枠は飛ばしました）');
+  assert.equal(toastText(d), '10枠を追加しました（同じ時刻の2枠は飛ばしました）');
   assert.deepEqual(gas.get().data.slots.filter(s => s.date === D1).map(s => `${s.start}-${s.end}`),
     ['09:00-09:30', '09:30-10:00', '10:00-10:30', '10:30-11:00']);
+  assert.equal(gas.get().data.slots.filter(s => s.date === D3).length, 4);
+  assert.equal(d.querySelectorAll('#date-chips .chip').length, 0);
   assert.equal(d.getElementById('slot-end').value, '');
+  assert.equal(d.getElementById('slot-submit').textContent, '枠を追加');
+  assert.match(gas.post({ action: 'addSlots', passcode: PASS, dates: [PAST, D1], start: '15:00', minutes: 30 }).error, /過ぎた日付/);
   assert.match(gas.post({ action: 'addSlots', passcode: PASS, date: D1, start: '10:00', end: '09:00', minutes: 30 }).error, /終了は開始より/);
   assert.match(gas.post({ action: 'addSlots', passcode: PASS, date: '2026-02-30', start: '10:00', minutes: 30 }).error, /日付/);
   // パスコードなしでは作れない
