@@ -16,28 +16,29 @@ PWA（Vercel） ⇄ GAS（Webアプリ） ⇄ スプレッドシート
   - メンバー：社員番号・名前の追加・編集・削除（どちらも重複不可）
 
 ## セットアップ
+GAS は [clasp](https://github.com/google/clasp) で管理する（Code.gs の手動貼り付け・`setup` の実行は不要。シートは初回アクセス時に自動で作られる）。
 
-### 1. スプレッドシートと GAS
-1. Google ドライブで新しいスプレッドシートを作成する
-2. 「拡張機能 > Apps Script」を開き、`gas/Code.gs` の内容を貼り付けて保存する
-3. 関数 `setup` を選んで「実行」する（初回は権限の承認が必要）
-   - 「メンバー」「面談枠」「設定」「変更履歴」のシートが作られる
-4. 「設定」シートに次の内容を書く
-   - 面談名：画面タイトルに使う（例：上期）。空欄なら「面談管理」とだけ表示する
+### 初回だけ必要な準備
+1. https://script.google.com/home/usersettings で「Google Apps Script API」をオンにする
+2. `npx @google/clasp login` でブラウザから承認する
+3. このフォルダに `.clasp.json`（`scriptId` と `"rootDir": "gas"`）を置く。スクリプトIDは公開しないため `.gitignore` で除外している
+   - 新規に作るときは `npx @google/clasp create-script --type sheets --title "面談管理" --rootDir gas`
+4. 新規のときは、スクリプトの権限を1度承認し（GAS エディタで任意の関数を実行）、`npx @google/clasp create-deployment` で発行した URL を `config.js` の `GAS_URL` に入れる
+5. 「設定」シートに面談名と管理パスコードを書く
+   - 面談名：画面タイトルに使う（例：2026下期）。空欄なら「面談管理」とだけ表示する
    - 管理パスコード：管理者画面に入るためのパスコード（必須）
-5. 「デプロイ > 新しいデプロイ」から次の設定でデプロイする
-   - 種類：ウェブアプリ
-   - 次のユーザーとして実行：自分
-   - アクセスできるユーザー：全員
-6. 表示された URL（末尾が `/exec`）をコピーする
 
-### 2. PWA
-1. `config.js` の `GAS_URL` に、手順 1-6 の URL を貼り付ける
-2. このフォルダを Vercel などで公開する
-3. 管理者画面の「メンバー」タブでメンバーを登録し、「面談枠」タブで枠を作ってから、公開 URL をメンバーに共有する。スマホでは「ホーム画面に追加」するとアプリとして使える
+### PWA
+1. このフォルダを Vercel で公開する（home-app で commit 後 `git subtree push --prefix=mendan mendan main`）
+2. 管理者画面の「メンバー」タブでメンバーを登録し、「面談枠」タブで枠を作ってから、公開 URL をメンバーに共有する。スマホでは「ホーム画面に追加」するとアプリとして使える
 
 ## GAS を修正したとき
-「デプロイ > デプロイを管理」で既存のデプロイを編集し、バージョンを「新バージョン」にして更新する（URL は変わらない）。
+URL を変えずに新しいバージョンへ更新する（デプロイIDは `config.js` の URL の `/s/` と `/exec` の間）。
+```
+npx @google/clasp push --force
+npx @google/clasp create-deployment -i <デプロイID> -d "<変更内容>"
+```
+ウェブアプリの公開設定（自分として実行・全員がアクセス可）は `gas/appsscript.json` の `webapp` で指定している。
 
 ## 動作テスト
 `tests/fake-gas.js` でスプレッドシートなどをモックして `gas/Code.gs` を動かし、`app.js` を jsdom 上でつないで、画面の操作からシートへの保存までを確認する（`tests/app.test.js`）。

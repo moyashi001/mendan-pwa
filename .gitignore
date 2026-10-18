@@ -1,1 +1,3 @@
 node_modules/
+# clasp の設定（スクリプトID・スプレッドシートID）は公開しない
+.clasp.json

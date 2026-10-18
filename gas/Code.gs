@@ -16,7 +16,7 @@ const MAX_SLOTS_PER_ADD = 50;
 const MAX_PASS_FAILS = 10;
 const PASS_LOCK_SECONDS = 600;
 
-// 初回に1度だけ GAS エディタから実行する
+// シートを作る。初回のアクセス時に自動で呼ばれる
 function setup() {
   const ss = SpreadsheetApp.getActiveSpreadsheet();
   // 社員番号の先頭の 0 や日付・時刻が自動変換されないよう、文字列として扱う
@@ -226,8 +226,10 @@ function sheets_() {
     slots: ss.getSheetByName(SHEET_SLOTS),
     settings: ss.getSheetByName(SHEET_SETTINGS),
   };
+  // 初回はシートがないため、ここで作る（GAS エディタで setup を実行しなくてよい）
   if (!s.members || !s.slots || !s.settings) {
-    throw new Error('シートがありません。GASエディタで setup を実行してください');
+    setup();
+    return sheets_();
   }
   s.log = ensureSheet_(ss, SHEET_LOG, LOG_HEADER);
   return s;
