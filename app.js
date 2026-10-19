@@ -50,10 +50,8 @@ function slotLabel(key) {
   const s = slotByKey(key);
   return s ? `${fmtDate(s.date)} ${s.start}〜${s.end}` : `${key}（削除された枠）`;
 }
-function localToday() {
-  const d = new Date();
-  return `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, '0')}-${String(d.getDate()).padStart(2, '0')}`;
-}
+const ymd = d => `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, '0')}-${String(d.getDate()).padStart(2, '0')}`;
+const localToday = () => ymd(new Date());
 const today = () => state.today || localToday();
 const upcomingSlots = () => state.slots.filter(s => s.date >= today());
 
@@ -219,6 +217,7 @@ function renderAdmin() {
   el.requests.innerHTML = requestsHtml(members);
   el.slotAdminList.innerHTML = slotsAdminHtml(members);
   el.memberAdminList.innerHTML = membersAdminHtml(members);
+  renderSlotForm();
 }
 
 function requestsHtml(members) {
@@ -427,13 +426,17 @@ async function copyText(text) {
 }
 
 // ---- 面談枠の追加（日付を複数選び、同じ時間帯で作る） ----
+// 日付は期間と曜日でまとめて選び、カレンダーのタップで1日ずつ足し引きする
+const WEEK_ORDER = [1, 2, 3, 4, 5, 6, 0]; // 月曜始まり
+const MAX_RANGE_DAYS = 366;
 let slotDates = [];
+let rangeWeekdays = [1, 2, 3, 4, 5];
+let calMonth = ''; // 表示中の月（YYYY-MM）
 
-// 日付欄に入れたまま「追加」を押していない日付も含める
-function pendingDates() {
-  const typed = $('slot-date').value;
-  return typed && !slotDates.includes(typed) ? [...slotDates, typed].sort() : slotDates;
-}
+const toggleDate = d => {
+  slotDates = slotDates.includes(d) ? slotDates.filter(x => x !== d) : [...slotDates, d].sort();
+};
+const parseDate = s => { const [y, m, d] = s.split('-').map(Number); return new Date(y, m - 1, d); };
 
 // 作られる枠の数（すでにある枠も含む）。開始などが未入力なら 0
 function slotCount() {
@@ -442,36 +445,91 @@ function slotCount() {
   const minutes = Number($('slot-minutes').value);
   const end = $('slot-end').value ? toMin($('slot-end').value) : start + minutes;
   if (!(minutes > 0) || isNaN(start) || end < start + minutes) return 0;
-  return Math.floor((end - start) / minutes) * pendingDates().length;
+  return Math.floor((end - start) / minutes) * slotDates.length;
+}
+
+function calendarHtml() {
+  const [y, m] = calMonth.split('-').map(Number);
+  const lead = (new Date(y, m - 1, 1).getDay() + 6) % 7;
+  const last = new Date(y, m, 0).getDate();
+  const slotDays = new Set(state.slots.map(s => s.date));
+  const cells = WEEK_ORDER.map(w => `<span class="cal-wd${w === 6 ? ' sat' : w === 0 ? ' sun' : ''}">${WEEKDAYS[w]}</span>`);
+  for (let i = 0; i < lead; i++) cells.push('<span></span>');
+  for (let i = 1; i <= last; i++) {
+    const date = new Date(y, m - 1, i);
+    const d = ymd(date);
+    const on = slotDates.includes(d);
+    const cls = ['cal-day', on && 'on', d === today() && 'today', slotDays.has(d) && 'has-slot',
+      date.getDay() === 6 && 'sat', date.getDay() === 0 && 'sun'].filter(Boolean).join(' ');
+    cells.push(`<button type="button" class="${cls}" data-cal-date="${d}" aria-pressed="${on}" aria-label="${esc(fmtDate(d))}"${d < today() ? ' disabled' : ''}>${i}</button>`);
+  }
+  return cells.join('');
 }
 
 function renderSlotForm() {
+  if (!calMonth) calMonth = today().slice(0, 7);
+  $('range-weekdays').innerHTML = WEEK_ORDER.map(w => {
+    const on = rangeWeekdays.includes(w);
+    return `<button type="button" class="wd${on ? ' on' : ''}" data-wd="${w}" aria-pressed="${on}">${WEEKDAYS[w]}</button>`;
+  }).join('');
+  const [y, m] = calMonth.split('-').map(Number);
+  $('cal-title').textContent = `${y}年${m}月`;
+  $('cal-prev').disabled = calMonth <= today().slice(0, 7);
+  $('cal-grid').innerHTML = calendarHtml();
+  $('date-count').textContent = slotDates.length ? `${slotDates.length}日を選択中` : '日付が選ばれていません';
+  $('date-clear').hidden = !slotDates.length;
   $('date-chips').innerHTML = slotDates.map(d =>
     `<button type="button" class="chip" data-remove-date="${esc(d)}" aria-label="${esc(fmtDate(d))}を外す">${esc(fmtDate(d))} ×</button>`).join('');
   const n = slotCount();
   $('slot-submit').textContent = n ? `${n}枠を追加` : '枠を追加';
 }
 
-function addSlotDate() {
-  const d = $('slot-date').value;
-  if (!d) return;
-  if (!slotDates.includes(d)) slotDates = [...slotDates, d].sort();
-  $('slot-date').value = '';
+// 期間内で選んだ曜日の日付をまとめて選ぶ（過ぎた日と選択済みの日は除く）
+function addRangeDates() {
+  const from = $('range-from').value;
+  const to = $('range-to').value;
+  if (!from || !to) return toast('期間の開始と終了を入れてください', 'error');
+  if (to < from) return toast('期間の終了は開始と同じか後にしてください', 'error');
+  if ((parseDate(to) - parseDate(from)) / 86400000 > MAX_RANGE_DAYS) return toast('期間は1年以内にしてください', 'error');
+  if (!rangeWeekdays.length) return toast('曜日を選んでください', 'error');
+  const added = [];
+  for (const date = parseDate(from); ymd(date) <= to; date.setDate(date.getDate() + 1)) {
+    const d = ymd(date);
+    if (d >= today() && rangeWeekdays.includes(date.getDay()) && !slotDates.includes(d)) added.push(d);
+  }
+  if (!added.length) return toast('選べる日付がありません（過ぎた日・選択済みの日は除きます）', 'error');
+  slotDates = [...slotDates, ...added].sort();
+  calMonth = added[0].slice(0, 7);
+  renderSlotForm();
+  toast(`${added.length}日を選びました`, 'success');
+}
+
+function shiftMonth(n) {
+  const [y, m] = calMonth.split('-').map(Number);
+  calMonth = ymd(new Date(y, m - 1 + n, 1)).slice(0, 7);
   renderSlotForm();
 }
 
-$('date-add-btn').addEventListener('click', addSlotDate);
-$('date-chips').addEventListener('click', e => {
-  const chip = e.target.closest('[data-remove-date]');
-  if (!chip) return;
-  slotDates = slotDates.filter(d => d !== chip.dataset.removeDate);
+$('slot-form').addEventListener('click', e => {
+  const btn = e.target.closest('button');
+  if (!btn || btn.type === 'submit') return;
+  if (btn.id === 'range-add-btn') return addRangeDates();
+  if (btn.id === 'cal-prev') return shiftMonth(-1);
+  if (btn.id === 'cal-next') return shiftMonth(1);
+  if (btn.id === 'date-clear') slotDates = [];
+  else if (btn.dataset.wd) {
+    const w = Number(btn.dataset.wd);
+    rangeWeekdays = rangeWeekdays.includes(w) ? rangeWeekdays.filter(x => x !== w) : [...rangeWeekdays, w];
+  } else if (btn.dataset.calDate) toggleDate(btn.dataset.calDate);
+  else if (btn.dataset.removeDate) slotDates = slotDates.filter(d => d !== btn.dataset.removeDate);
+  else return;
   renderSlotForm();
 });
 $('slot-form').addEventListener('input', renderSlotForm);
 
 $('slot-form').addEventListener('submit', async e => {
   e.preventDefault();
-  const dates = pendingDates();
+  const dates = slotDates;
   if (!dates.length) {
     toast('日付を選んでください', 'error');
     return;
@@ -489,7 +547,8 @@ $('slot-form').addEventListener('submit', async e => {
     added ? 'success' : 'error');
   if (added) {
     slotDates = [];
-    $('slot-date').value = '';
+    $('range-from').value = '';
+    $('range-to').value = '';
     $('slot-end').value = '';
     renderSlotForm();
   }

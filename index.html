@@ -47,10 +47,27 @@
 
       <section id="tab-slots" class="panel">
         <form id="slot-form" class="card-form">
-          <label for="slot-date">日付（複数選べます）</label>
-          <div class="date-add">
-            <input id="slot-date" type="date">
-            <button id="date-add-btn" type="button">追加</button>
+          <div class="field-title">日付（複数選べます）</div>
+          <div class="range-box">
+            <div class="range-dates">
+              <label>期間の開始<input id="range-from" type="date"></label>
+              <label>期間の終了<input id="range-to" type="date"></label>
+            </div>
+            <div id="range-weekdays" class="weekdays" role="group" aria-label="曜日"></div>
+            <button id="range-add-btn" type="button" class="range-add">期間の日付をまとめて選ぶ</button>
+          </div>
+          <div class="calendar">
+            <div class="cal-head">
+              <button id="cal-prev" type="button" aria-label="前の月">‹</button>
+              <span id="cal-title"></span>
+              <button id="cal-next" type="button" aria-label="次の月">›</button>
+            </div>
+            <div id="cal-grid" class="cal-grid"></div>
+            <p class="cal-note">タップで選ぶ・外す。<span class="dot"></span>は枠がある日</p>
+          </div>
+          <div class="date-selected">
+            <span id="date-count"></span>
+            <button id="date-clear" type="button" class="ghost small">すべて外す</button>
           </div>
           <div id="date-chips" class="chips"></div>
           <div class="grid2">
@@ -58,7 +75,7 @@
             <label>終了（任意）<input id="slot-end" type="time" step="300"></label>
             <label>1枠（分）<input id="slot-minutes" type="number" min="5" max="480" step="5" value="30" required></label>
           </div>
-          <p class="hint">選んだ日付すべてに、同じ時間帯の枠を作ります。終了を入れると、開始〜終了を1枠の長さで区切ってまとめて作ります</p>
+          <p class="hint">期間と曜日でまとめて選び、カレンダーで細かく足し引きできます。選んだ日付すべてに、同じ時間帯の枠を作ります。終了を入れると、開始〜終了を1枠の長さで区切ってまとめて作ります</p>
           <button id="slot-submit" type="submit" class="primary">枠を追加</button>
         </form>
         <div id="slot-admin-list"></div>

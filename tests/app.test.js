@@ -224,16 +224,37 @@ test('枠は複数の日付に、開始〜終了を区切ってまとめて作�
     d.getElementById(id).value = value;
     form.dispatchEvent(new ctx.w.Event('input'));
   };
-  // 日付を2つ追加し、もう1つは日付欄に入れたままにする（これも含める）
-  fill('slot-date', D2);
-  await click(ctx, '#date-add-btn');
-  fill('slot-date', D1);
-  await click(ctx, '#date-add-btn');
-  fill('slot-date', D3);
-  await click(ctx, '#date-add-btn');
-  assert.deepEqual(texts(d, '#date-chips .chip').length, 3);
-  await click(ctx, `[data-remove-date="${D3}"]`);
-  fill('slot-date', D3);
+  const weekday = s => new Date(`${s}T00:00:00`).getDay();
+  const chips = () => [...d.querySelectorAll('#date-chips .chip')].map(c => c.dataset.removeDate);
+  // カレンダーは表示中の月になければ次の月へ送ってからタップする
+  const tapCalendar = async date => {
+    while (!d.querySelector(`[data-cal-date="${date}"]`)) await click(ctx, '#cal-next');
+    await click(ctx, `[data-cal-date="${date}"]`);
+  };
+  // 期間と曜日でまとめて選ぶ。過ぎた日は除き、選んだ曜日だけにする
+  for (const b of d.querySelectorAll('#range-weekdays .wd.on')) await click(ctx, `[data-wd="${b.dataset.wd}"]`);
+  await click(ctx, `[data-wd="${weekday(D2)}"]`);
+  await click(ctx, `[data-wd="${weekday(PAST)}"]`);
+  fill('range-from', PAST);
+  fill('range-to', D3);
+  await click(ctx, '#range-add-btn');
+  assert.deepEqual(chips(), [D2]);
+  // 曜日をすべて選ぶと残りの日付も加わる（選択済みの日は重ねない）
+  for (const w of [0, 1, 2, 3, 4, 5, 6]) {
+    if (!d.querySelector(`[data-wd="${w}"]`).classList.contains('on')) await click(ctx, `[data-wd="${w}"]`);
+  }
+  fill('range-from', D1);
+  await click(ctx, '#range-add-btn');
+  assert.equal(toastText(d), '2日を選びました');
+  assert.deepEqual(chips(), [D1, D2, D3]);
+  assert.ok(d.querySelector(`[data-cal-date="${PAST}"]`) === null || d.querySelector(`[data-cal-date="${PAST}"]`).disabled);
+  // カレンダーのタップで外し、もう一度タップで戻す
+  await tapCalendar(D2);
+  assert.deepEqual(chips(), [D1, D3]);
+  assert.equal(d.getElementById('date-count').textContent, '2日を選択中');
+  await tapCalendar(D2);
+  assert.deepEqual(chips(), [D1, D2, D3]);
+  assert.equal(d.querySelector(`[data-cal-date="${D2}"]`).getAttribute('aria-pressed'), 'true');
   fill('slot-start', '09:00');
   fill('slot-end', '11:00');
   fill('slot-minutes', '30');
@@ -247,6 +268,12 @@ test('枠は複数の日付に、開始〜終了を区切ってまとめて作�
   assert.equal(d.querySelectorAll('#date-chips .chip').length, 0);
   assert.equal(d.getElementById('slot-end').value, '');
   assert.equal(d.getElementById('slot-submit').textContent, '枠を追加');
+  // 「すべて外す」で選択をまとめて解除する
+  await tapCalendar(D3);
+  assert.equal(chips().length, 1);
+  await click(ctx, '#date-clear');
+  assert.equal(chips().length, 0);
+  assert.equal(d.getElementById('date-count').textContent, '日付が選ばれていません');
   assert.match(gas.post({ action: 'addSlots', passcode: PASS, dates: [PAST, D1], start: '15:00', minutes: 30 }).error, /過ぎた日付/);
   assert.match(gas.post({ action: 'addSlots', passcode: PASS, date: D1, start: '10:00', end: '09:00', minutes: 30 }).error, /終了は開始より/);
   assert.match(gas.post({ action: 'addSlots', passcode: PASS, date: '2026-02-30', start: '10:00', minutes: 30 }).error, /日付/);
